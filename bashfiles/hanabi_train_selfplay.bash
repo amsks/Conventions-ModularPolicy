@@ -3,4 +3,4 @@
 set -x
 
 runid=$1
-python run_hanabi.py --run=$runid --selfplay
+python run_hanabi_evo.py --run=$runid --selfplay

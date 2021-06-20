@@ -132,11 +132,11 @@ class MlpExtractor(nn.Module):
     of them are shared between the policy network and the value network. It is assumed to be a list with the following
     structure:
 
-    1. An arbitrary length (zero allowed) number of integers each specifying the number of units in a shared layer.
-       If the number of ints is zero, there will be no shared layers.
-    2. An optional dict, to specify the following non-shared layers for the value network and the policy network.
-       It is formatted like ``dict(vf=[<value layer sizes>], pi=[<policy layer sizes>])``.
-       If it is missing any of the keys (pi or vf), no non-shared layers (empty list) is assumed.
+    1.  An arbitrary length (zero allowed) number of integers each specifying the number of units in a shared layer.
+        If the number of ints is zero, there will be no shared layers.
+    2.  An optional dict, to specify the following non-shared layers for the value network and the policy network.
+        It is formatted like ``dict(vf=[<value layer sizes>], pi=[<policy layer sizes>])``.
+        If it is missing any of the keys (pi or vf), no non-shared layers (empty list) is assumed.
 
     For example to construct a network with one shared layer of size 55 followed by two non-shared layers for the value
     network of size 255 and a single non-shared layer of size 128 for the policy network, the following layers_spec

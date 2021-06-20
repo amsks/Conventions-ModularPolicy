@@ -169,13 +169,13 @@ class PPO(OnPolicyAlgorithm):
                         actions = rollout_data.actions.long().flatten()
 
                     # Re-sample the noise matrix because the log_std has changed
-                    # TODO: investigate why there is no issue with the gradient
+                    # TODO investigate why there is no issue with the gradient
                     # if that line is commented (as in SAC)
                     if self.use_sde:
                         self.policy.reset_noise(self.batch_size)
 
                     #values, log_prob, entropy = self.policy.evaluate_actions(rollout_data.observations, actions)
-                    values, log_prob, entropy = self.policy.evaluate_actions(rollout_data.observations, actions, partner_idx=partner_idx) 
+                    values, log_prob, entropy = self.policy.evaluate_actions(rollout_data.observations, actions, partner_idx=partner_idx)
                     values = values.flatten()
                     # Normalize advantage
                     advantages = rollout_data.advantages
@@ -208,12 +208,7 @@ class PPO(OnPolicyAlgorithm):
                     value_losses.append(value_loss.item())
 
                     # Entropy loss favor exploration
-                    if entropy is None:
-                        # Approximate entropy when no analytical form
-                        entropy_loss = log_prob.mean()
-                    else:
-                        entropy_loss = -th.mean(entropy)
-
+                    entropy_loss = log_prob.mean() if entropy is None else -th.mean(entropy)
                     entropy_losses.append(entropy_loss.item())
 
                     ###########

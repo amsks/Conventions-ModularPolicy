@@ -11,7 +11,7 @@ import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.preprocessing import preprocess_obs, is_image_space, get_action_dim
 from stable_baselines3.common.torch_layers import (FlattenExtractor, BaseFeaturesExtractor, create_mlp,
-                                                   NatureCNN, MlpExtractor)
+                                                NatureCNN, MlpExtractor)
 from stable_baselines3.common.utils import get_device, is_vectorized_observation
 from stable_baselines3.common.vec_env import VecTransposeImage
 from stable_baselines3.common.distributions import (make_proba_distribution, Distribution,
@@ -20,6 +20,13 @@ from stable_baselines3.common.distributions import (make_proba_distribution, Dis
                                                     StateDependentNoiseDistribution)
 from stable_baselines3.common.policies import BasePolicy
 
+
+
+'''
+    NOTE This is implementing the same interface as the actor critic policy in stable baselines. Hence,
+    they have injected the Hanabi stuff following the format to make it compatible with the PPO class
+
+'''
 class ModularPolicy(BasePolicy):
     """
     Policy class for actor-critic algorithms (has both policy and value prediction).
@@ -47,7 +54,7 @@ class ModularPolicy(BasePolicy):
     :param features_extractor_kwargs: (Optional[Dict[str, Any]]) Keyword arguments
         to pass to the feature extractor.
     :param normalize_images: (bool) Whether to normalize images or not,
-         dividing by 255.0 (True by default)
+        dividing by 255.0 (True by default)
     :param optimizer_class: (Type[th.optim.Optimizer]) The optimizer to use,
         ``th.optim.Adam`` by default
     :param optimizer_kwargs: (Optional[Dict[str, Any]]) Additional keyword arguments,
@@ -55,31 +62,31 @@ class ModularPolicy(BasePolicy):
     """
 
     def __init__(self,
-                 observation_space: gym.spaces.Space,
-                 action_space: gym.spaces.Space,
-                 lr_schedule: Callable[[float], float],
-                 net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
-                 device: Union[th.device, str] = 'auto',
-                 activation_fn: Type[nn.Module] = nn.Tanh,
-                 ortho_init: bool = True,
-                 use_sde: bool = False,
-                 log_std_init: float = 0.0,
-                 full_std: bool = True,
-                 sde_net_arch: Optional[List[int]] = None,
-                 use_expln: bool = False,
-                 squash_output: bool = False,
-                 features_extractor_class: Type[BaseFeaturesExtractor] = FlattenExtractor,
-                 features_extractor_kwargs: Optional[Dict[str, Any]] = None,
-                 normalize_images: bool = True,
-                 optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
-                 optimizer_kwargs: Optional[Dict[str, Any]] = None,
+                observation_space: gym.spaces.Space,
+                action_space: gym.spaces.Space,
+                lr_schedule: Callable[[float], float],
+                net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
+                device: Union[th.device, str] = 'auto',
+                activation_fn: Type[nn.Module] = nn.Tanh,
+                ortho_init: bool = True,
+                use_sde: bool = False,
+                log_std_init: float = 0.0,
+                full_std: bool = True,
+                sde_net_arch: Optional[List[int]] = None,
+                use_expln: bool = False,
+                squash_output: bool = False,
+                features_extractor_class: Type[BaseFeaturesExtractor] = FlattenExtractor,
+                features_extractor_kwargs: Optional[Dict[str, Any]] = None,
+                normalize_images: bool = True,
+                optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
+                optimizer_kwargs: Optional[Dict[str, Any]] = None,
 
-                 # my additional arguments
-                 num_partners: int = 1,
-                 partner_net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None, # net arch for each partner-specific module
-                 baseline: bool = False,
-                 nomain: bool = False,
-                 ):
+                # my additional arguments
+                num_partners: int = 1,
+                partner_net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None, # net arch for each partner-specific module
+                baseline: bool = False,
+                nomain: bool = False,
+                ):
 
         if optimizer_kwargs is None:
             optimizer_kwargs = {}
@@ -96,14 +103,18 @@ class ModularPolicy(BasePolicy):
                                                 optimizer_kwargs=optimizer_kwargs,
                                                 squash_output=squash_output)
 
+        # NOTE Hanabi Stuff
         self.num_partners = num_partners
         print("CUDA: ", th.cuda.is_available())
-
+        
+        
+        # NOTE Defining Partner architecture -> Need to incorporate Rulebased ?
         if partner_net_arch is None:
             if features_extractor_class == FlattenExtractor:
                 partner_net_arch = [dict(pi=[64, 64], vf=[64, 64])]
             else:
                 partner_net_arch = []
+                
         self.partner_net_arch = partner_net_arch
         self.baseline = baseline
         self.nomain = nomain
@@ -112,7 +123,10 @@ class ModularPolicy(BasePolicy):
         # Default network architecture, from stable-baselines
         if net_arch is None:
             if features_extractor_class == FlattenExtractor:
-                net_arch = [dict(pi=[64, 64], vf=[64, 64])]
+                net_arch = [    dict(   pi=[64, 64], 
+                                        vf=[64, 64]
+                                    )
+                            ]
             else:
                 net_arch = []
         self.net_arch = net_arch
@@ -126,6 +140,7 @@ class ModularPolicy(BasePolicy):
         self.normalize_images = normalize_images
         self.log_std_init = log_std_init
         dist_kwargs = None
+
         # Keyword arguments for gSDE distribution
         if use_sde:
             dist_kwargs = {
@@ -146,7 +161,7 @@ class ModularPolicy(BasePolicy):
         self.lr_schedule = lr_schedule
         self._build(self.lr_schedule)
 
-    # freeze / unfreeze the module networks
+    # NOTE : Shih's injection -> freeze / unfreeze the module networks
     def set_freeze_module(self, module, freeze):
         for param in module.parameters():
             param.requires_grad = not freeze
@@ -189,10 +204,26 @@ class ModularPolicy(BasePolicy):
         :param n_envs: (int)
         """
         assert isinstance(self.action_dist,
-                          StateDependentNoiseDistribution), 'reset_noise() is only available when using gSDE'
+                        StateDependentNoiseDistribution), 'reset_noise() is only available when using gSDE'
         self.action_dist.sample_weights(self.log_std, batch_size=n_envs)
 
-    def make_action_dist_net(self, latent_dim_pi: int, latent_sde_dim: int = 0):
+    def make_action_dist_net(   self, 
+                                latent_dim_pi: int, 
+                                latent_sde_dim: int = 0
+                            ):
+        """[summary]
+
+        Args:
+            latent_dim_pi (int): [Latent Dimensions]
+            latent_sde_dim (int, optional): [Dimensions of State Dependent Observation]. Defaults to 0.
+
+        Raises:
+            NotImplementedError: [Distributin not supported]
+
+        Returns:
+            [action_net]:   [Action Network MLP]
+            [log_std]:      [Standard log deviation of the probability distribution of actions]
+        """
         action_net, log_std = None, None
         if isinstance(self.action_dist, DiagGaussianDistribution):
             action_net, log_std = self.action_dist.proba_distribution_net(latent_dim=latent_dim_pi,
@@ -212,9 +243,29 @@ class ModularPolicy(BasePolicy):
             raise NotImplementedError(f"Unsupported distribution '{self.action_dist}'.")
         return action_net, log_std
 
-    def build_mlp_action_value_net(self, input_dim, net_arch):
-        mlp_extractor = MlpExtractor(input_dim, net_arch=net_arch,
-                                          activation_fn=self.activation_fn, device=self.device)
+    def build_mlp_action_value_net( self, 
+                                    input_dim, 
+                                    net_arch
+                                ):
+        """[summary]
+
+        Args:
+            input_dim ([int]):  [Dimensions of the Features extractor]
+            net_arch ([int]):   [Architecture to be followed]
+
+        Returns:
+            [mlp_extractor]:    [MLP that receives observations as an input and outputs a latent 
+                                representation for the policy and a value network]
+            [action_net]:       [Network for action probabilities]
+            [log_std]   :       [Standard log deviation of the probability distribution of actions]
+            [value_net] :       [Value network using latent dimensions]
+        """
+        
+        mlp_extractor = MlpExtractor(   input_dim, 
+                                        net_arch=net_arch,
+                                        activation_fn=self.activation_fn, 
+                                        device=self.device
+                                    )
         action_net, log_std = self.make_action_dist_net(mlp_extractor.latent_dim_pi)
         value_net = nn.Linear(mlp_extractor.latent_dim_vf, 1)
         return mlp_extractor, action_net, log_std, value_net
@@ -243,28 +294,42 @@ class ModularPolicy(BasePolicy):
 
     def _build(self, lr_schedule: Callable[[float], float]) -> None:
         """
-        Create the networks and the optimizer.
-        :param lr_schedule: (Callable) Learning rate schedule
-            lr_schedule(1) is the initial learning rate
+            Create the networks and the optimizer.
+            :param lr_schedule: (Callable) Learning rate schedule
+                lr_schedule(1) is the initial learning rate
         """
-        # Note: If net_arch is None and some features extractor is used,
+        # NOTE: If net_arch is None and some features extractor is used,
         #       net_arch here is an empty list and mlp_extractor does not
         #       really contain any layers (acts like an identity module).
 
-        self.mlp_extractor, self.action_net, self.log_std, self.value_net = self.build_mlp_action_value_net(input_dim=self.features_dim, net_arch=self.net_arch)
+        self.mlp_extractor, self.action_net, self.log_std, self.value_net = \
+            self.build_mlp_action_value_net(    input_dim=self.features_dim, 
+                                                net_arch=self.net_arch
+                                            )
 
-        partner_builds = [self.build_mlp_action_value_net(input_dim=self.mlp_extractor.latent_dim_pi, net_arch=self.partner_net_arch) for _ in range(self.num_partners)]
+        partner_builds = [  self.build_mlp_action_value_net(    
+                                        input_dim=self.mlp_extractor.latent_dim_pi, 
+                                        net_arch=self.partner_net_arch
+                                    ) for _ in range(self.num_partners)
+                        ]
+        
         if self.baseline: # use the same partner module for all partners
             print("Baseline architecture: using the same partner module.")
             partner_builds = [partner_builds[0]] * self.num_partners
 
-        self.partner_mlp_extractor, self.partner_action_net, self.partner_log_std, self.partner_value_net = zip(*partner_builds)
+        self.partner_mlp_extractor, self.partner_action_net, \
+            self.partner_log_std, self.partner_value_net = zip(*partner_builds)
+        
         self.partner_mlp_extractor = nn.ModuleList(self.partner_mlp_extractor)
         self.partner_action_net = nn.ModuleList(self.partner_action_net)
         self.partner_value_net = nn.ModuleList(self.partner_value_net)
 
         # Setup optimizer with initial learning rate
-        self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
+        self.optimizer = self.optimizer_class(  self.parameters(), 
+                                                lr=lr_schedule(1), 
+                                                **self.optimizer_kwargs
+                                            )
+        
         self.do_init_weights(init_main=True, init_partner=True)
 
     def merge_partner_modules(self) -> None:
@@ -283,10 +348,10 @@ class ModularPolicy(BasePolicy):
                 partner_idx: int,
                 deterministic: bool = False) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """
-        Forward pass in all the networks (actor and critic)
-        :param obs: (th.Tensor) Observation
-        :param deterministic: (bool) Whether to sample or use deterministic actions
-        :return: (Tuple[th.Tensor, th.Tensor, th.Tensor]) action, value and log probability of the action
+            Forward pass in all the networks (actor and critic)
+            :param obs: (th.Tensor) Observation
+            :param deterministic: (bool) Whether to sample or use deterministic actions
+            :return: (Tuple[th.Tensor, th.Tensor, th.Tensor]) action, value and log probability of the action
         """
         latent_pi, latent_vf, _ = self._get_latent(obs=obs)
         partner_latent_pi, partner_latent_vf = self.partner_mlp_extractor[partner_idx](latent_pi)
@@ -300,11 +365,11 @@ class ModularPolicy(BasePolicy):
 
     def _get_latent(self, obs: th.Tensor) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """
-        Get the latent code (i.e., activations of the last layer of each network)
-        for the different networks.
-        :param obs: (th.Tensor) Observation
-        :return: (Tuple[th.Tensor, th.Tensor, th.Tensor]) Latent codes
-            for the actor, the value function and for gSDE function
+            Get the latent code (i.e., activations of the last layer of each network)
+            for the different networks.
+            :param obs: (th.Tensor) Observation
+            :return: (Tuple[th.Tensor, th.Tensor, th.Tensor]) Latent codes
+                for the actor, the value function and for gSDE function
         """
         # Preprocess the observation if needed
         features = self.extract_features(obs)
@@ -318,23 +383,20 @@ class ModularPolicy(BasePolicy):
         return latent_pi, latent_vf, latent_sde
 
     def _get_action_dist_from_latent(self, latent_pi: th.Tensor,
-                                     partner_latent_pi: th.Tensor,
-                                     partner_idx: int,
-                                     latent_sde: Optional[th.Tensor] = None,
-                                     action_mask: Optional[th.Tensor] = None) -> Distribution:
+                                    partner_latent_pi: th.Tensor,
+                                    partner_idx: int,
+                                    latent_sde: Optional[th.Tensor] = None,
+                                    action_mask: Optional[th.Tensor] = None) -> Distribution:
         """
-        Retrieve action distribution given the latent codes.
-        :param latent_pi: (th.Tensor) Latent code for the actor
-        :param latent_sde: (Optional[th.Tensor]) Latent code for the gSDE exploration function
-        :return: (Distribution) Action distribution
+            Retrieve action distribution given the latent codes.
+            :param latent_pi: (th.Tensor) Latent code for the actor
+            :param latent_sde: (Optional[th.Tensor]) Latent code for the gSDE exploration function
+            :return: (Distribution) Action distribution
         """
         main_logits = self.action_net(latent_pi)
         partner_logits = self.partner_action_net[partner_idx](partner_latent_pi)
 
-        if self.nomain:
-            mean_actions = partner_logits
-        else:
-            mean_actions = main_logits + partner_logits
+        mean_actions = partner_logits if self.nomain else main_logits + partner_logits
         
         large_exponent = 30
         if action_mask is not None:
@@ -345,6 +407,7 @@ class ModularPolicy(BasePolicy):
         if isinstance(self.action_dist, DiagGaussianDistribution):
             log_std = self.log_std + self.partner_log_std[partner_idx]
             return self.action_dist.proba_distribution(mean_actions, log_std)
+        ## ADI - Entry point for RAINBOW
         elif isinstance(self.action_dist, CategoricalDistribution):
             # Here mean_actions are the logits before the softmax
             return self.action_dist.proba_distribution(action_logits=mean_actions)
@@ -362,25 +425,26 @@ class ModularPolicy(BasePolicy):
 
     def _predict(self, observation: th.Tensor, partner_idx: int, deterministic: bool = False) -> th.Tensor:
         """
-        Get the action according to the policy for a given observation.
-        :param observation: (th.Tensor)
-        :param deterministic: (bool) Whether to use stochastic or deterministic actions
-        :return: (th.Tensor) Taken action according to the policy
+            Get the action according to the policy for a given observation.
+            :param observation: (th.Tensor)
+            :param deterministic: (bool) Whether to use stochastic or deterministic actions
+            :return: (th.Tensor) Taken action according to the policy
         """
         actions, _, _ = self.forward(obs=observation, partner_idx=partner_idx, deterministic=deterministic)
         return actions
 
     def evaluate_actions(self, obs: th.Tensor,
-                         actions: th.Tensor,
-                         partner_idx: int,
-                         action_mask: Optional[th.Tensor] = None) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
+                        actions: th.Tensor,
+                        partner_idx: int,
+                        action_mask: Optional[th.Tensor] = None
+                        ) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """
-        Evaluate actions according to the current policy,
-        given the observations.
-        :param obs: (th.Tensor)
-        :param actions: (th.Tensor)
-        :return: (th.Tensor, th.Tensor, th.Tensor) estimated value, log likelihood of taking those actions
-            and entropy of the action distribution.
+            Evaluate actions according to the current policy,
+            given the observations.
+            :param obs: (th.Tensor)
+            :param actions: (th.Tensor)
+            :return: (th.Tensor, th.Tensor, th.Tensor) estimated value, log likelihood of taking those actions
+                and entropy of the action distribution.
         """
 
         latent_pi, latent_vf, _ = self._get_latent(obs=obs)
@@ -391,7 +455,11 @@ class ModularPolicy(BasePolicy):
         values = self.value_net(latent_vf) + self.partner_value_net[partner_idx](partner_latent_vf)
         return values, log_prob, distribution.entropy()
 
-    def get_action_logits_from_obs(self, obs: th.Tensor, partner_idx: int, action_mask: Optional[th.Tensor] = None) -> th.Tensor:
+    def get_action_logits_from_obs( self, 
+                                    obs: th.Tensor, 
+                                    partner_idx: int, 
+                                    action_mask: Optional[th.Tensor] = None
+                                    ) -> th.Tensor:
         latent_pi, _, _ = self._get_latent(obs=obs)
         partner_latent_pi, _ = self.partner_mlp_extractor[partner_idx](latent_pi)
 

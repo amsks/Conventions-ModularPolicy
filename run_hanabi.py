@@ -22,32 +22,56 @@ from util import adapt_task, adapt_partner_baseline, adapt_partner_modular, adap
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
+
+# TODO Re-factor into classes
+
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--n',              type=int, default=4,     help="n arms")
-parser.add_argument('--run',            type=int, default=0,     help="Run ID. In case you want to run replicates")
-parser.add_argument('--netsz',          type=int, default=500,     help="Size of policy network")
-parser.add_argument('--latentz',        type=int, default=500,    help="Size of latent z dimension")
+parser.add_argument('--n', type=int, default=4,     
+                    help="n arms")
+parser.add_argument('--run', type=int, default=0,     
+                    help="Run ID. In case you want to run replicates")
+parser.add_argument('--netsz', type=int, default=500,     
+                    help="Size of policy network")
+parser.add_argument('--latentz', type=int, default=500,    
+                    help="Size of latent z dimension")
+                    
+parser.add_argument('--mreg', type=float, default=0.0, 
+                    help="Marginal regularization.")
+parser.add_argument('--baseline', action='store_true', default=False, 
+                    help="Baseline: no modular separation.")
+parser.add_argument('--nomain', action='store_true', default=False, 
+                    help="Baseline: don't use main logits.")
 
-parser.add_argument('--mreg',           type=float, default=0.0, help="Marginal regularization.")
-parser.add_argument('--baseline',       action='store_true', default=False, help="Baseline: no modular separation.")
-parser.add_argument('--nomain',         action='store_true', default=False, help="Baseline: don't use main logits.")
+parser.add_argument('--timesteps', type=int, default=500000,     
+                    help="Number of timesteps to train for")
+parser.add_argument('--selfplay', action='store_true', default=False, 
+                    help="converge using selfplay")
+parser.add_argument('--testing', action='store_true', default=False, 
+                    help="Testing.")
+parser.add_argument('--zeroshot', action='store_true', default=False, 
+                    help="Try zeroshot combination of task + partner.")
 
-parser.add_argument('--timesteps',      type=int, default=500000,     help="Number of timesteps to train for")
-parser.add_argument('--selfplay',       action='store_true', default=False, help="converge using selfplay")
-parser.add_argument('--testing',        action='store_true', default=False, help="Testing.")
-parser.add_argument('--zeroshot',       action='store_true', default=False, help="Try zeroshot combination of task + partner.")
+parser.add_argument('--k', type=int, default=0, 
+                    help="When fixed partner=True, k is the index of the test partner")
 
-parser.add_argument('--k',              type=int, default=0, help="When fixedpartner=True, k is the index of the test partner")
-
-parser.add_argument('--colors',                  type=int, default=1,     help="number of card colors in the game")
-parser.add_argument('--ranks',                   type=int, default=5,     help="number of card ranks in the game")
-parser.add_argument('--hand_sz',                    type=int, default=2,     help="hand size of each player")
-parser.add_argument('--info',              type=int, default=3,     help="number of information tokens")
-parser.add_argument('--life',              type=int, default=3,     help="number of life tokens")
+parser.add_argument('--colors', type=int, default=1,     
+                    help="number of card colors in the game")
+parser.add_argument('--ranks', type=int, default=5,     
+                    help="number of card ranks in the game")
+parser.add_argument('--hand_sz', type=int, default=2,     
+                    help="hand size of each player")
+parser.add_argument('--info', type=int, default=3,     
+                    help="number of information tokens")
+parser.add_argument('--life', type=int, default=3,     
+                    help="number of life tokens")
 
 args = parser.parse_args()
 print(args)
 
+
+# TODO -> Work out a gin config for these
+
+# Function to define the metrics for the run and the output directories 
 def get_model_name_and_path(run, mreg=0.00):
     layout = [
         ('n={:01d}', args.n),
@@ -56,12 +80,13 @@ def get_model_name_and_path(run, mreg=0.00):
         ('mreg={:.2f}', mreg),
     ]
 
-    m_name = '_'.join([t.format(v) for (t, v) in layout])
+    m_name = '_'.join(t.format(v) for (t, v) in layout)
     m_path = 'output/hanabi_' + m_name
     return m_name, m_path
 
 model_name, model_path = get_model_name_and_path(args.run, mreg=args.mreg)
 
+# Hyperparameters
 HP = {
     'n_steps': 640,
     'n_steps_testing': 640,
@@ -71,6 +96,7 @@ HP = {
     'mreg': args.mreg,
 }
 
+# Game config
 config = {
     "colors":                   args.colors,
     "ranks":                    args.ranks,
@@ -86,30 +112,54 @@ env = gym.make('hanabi-v0', config=config)
 if args.selfplay:
     PARTNERS = None     # this must be None to trigger selfplay
 else:
+    # 
     setting, partner_type = "", "ppo"
     TRAIN_PARTNERS, TEST_PARTNERS = get_hanabi_partners(setting, partner_type)
     PARTNERS = [ TEST_PARTNERS[args.k % len(TEST_PARTNERS)] ] if args.testing else TRAIN_PARTNERS
+
 
 def main():
     global PARTNERS
     num_partners = len(PARTNERS) if PARTNERS is not None else 1
 
     print("model path: ", model_path)
-    net_arch = [args.netsz,args.latentz]
+    net_arch = [    
+        args.netsz,
+        args.latentz
+    ]
+
+    # NOTE insertion point for rule-based agents -> Look at how to interface this with Umut's work
     partner_net_arch = [args.netsz,args.netsz]
+    
     policy_kwargs = dict(activation_fn=nn.ReLU,
-                         net_arch=[dict(vf=net_arch, pi=net_arch)],
-                         partner_net_arch=[dict(vf=partner_net_arch, pi=partner_net_arch)],
-                         num_partners=num_partners,
-                         baseline=args.baseline,
-                         nomain=args.nomain,
-                         )
+                        net_arch=[dict(vf=net_arch, pi=net_arch)],
+                        
+                        # NOTE this needs to be changed somehow to incorporate multiple partners
+                        partner_net_arch=[dict(vf=partner_net_arch, pi=partner_net_arch)],
+                        num_partners=num_partners,
+                        baseline=args.baseline,
+                        nomain=args.nomain,
+                        )
 
     def load_model_fn(partners, testing, try_load=True):
-        return load_model(model_path=model_path, policy_class=HanabiPolicy, policy_kwargs=policy_kwargs, env=env, hp=HP, partners=partners, testing=testing, try_load=try_load)
+        return load_model(  model_path=model_path, 
+                            policy_class=HanabiPolicy, 
+                            policy_kwargs=policy_kwargs, 
+                            env=env, 
+                            hp=HP, 
+                            partners=partners, 
+                            testing=testing, 
+                            try_load=try_load
+                        )
 
     def learn_model_fn(model, timesteps, save, period):
-        return learn(model, model_name=model_name, model_path=model_path, timesteps=timesteps, save=save, period=period)
+        return learn(   model,
+                        model_name=model_name, 
+                        model_path=model_path, 
+                        timesteps=timesteps, 
+                        save=save, 
+                        period=period
+                    )
 
     # TRAINING
     if not args.testing:
@@ -118,6 +168,7 @@ def main():
         learn_model_fn(model, timesteps=args.timesteps, save=True, period=2000)
 
     ts, period = 25600, HP['n_steps_testing']
+
     # TESTING
     if args.testing and not args.zeroshot:
         if args.baseline:   adapt_partner_baseline(load_model_fn, learn_model_fn, partners=PARTNERS, timesteps=ts, period=period, do_optimal=False)

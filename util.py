@@ -42,7 +42,12 @@ def learn(model, model_name, model_path, timesteps, save, period, save_thresh=No
 
     while True:
         for partner_idx in range(model.policy.num_partners):
-            mean_reward, std_reward = evaluate_policy(model, model.get_env(), partner_idx=partner_idx, n_eval_episodes=200, deterministic=False)
+            mean_reward, std_reward = evaluate_policy(  model, 
+                                                        model.get_env(), 
+                                                        partner_idx=partner_idx, 
+                                                        n_eval_episodes=200, 
+                                                        deterministic=False
+                                                    )
             print("#data steps %u\t partner %u\t mean_rew %.2f\t std_rew %.2f\t" % (timesteps - steps, partner_idx, mean_reward, std_reward))
 
         if save_thresh is not None and mean_reward >= save_thresh:
@@ -72,7 +77,16 @@ def load_model(model_path, policy_class, policy_kwargs, env, hp, partners, testi
         print("Create new model")
         
         n_steps, batch_size, n_epochs, = hp['n_steps'], hp['batch_size'], hp['n_epochs']
-        model = PPO(policy_class, env, policy_kwargs=policy_kwargs, n_steps=n_steps, batch_size=batch_size, n_epochs=n_epochs, verbose=0, ent_coef=0.00, marginal_reg_coef=hp['mreg'])
+        model = PPO(    policy_class, 
+                        env, 
+                        policy_kwargs=policy_kwargs, 
+                        n_steps=n_steps, 
+                        batch_size=batch_size, 
+                        n_epochs=n_epochs, 
+                        verbose=0, 
+                        ent_coef=0.00, 
+                        marginal_reg_coef=hp['mreg']
+                    )
 
         for name, param in model.policy.named_parameters():
             if param.requires_grad:
@@ -84,7 +98,7 @@ def load_model(model_path, policy_class, policy_kwargs, env, hp, partners, testi
     model.policy.set_partners(partners)
     if testing:            
         model.policy.num_partners       = 1 # only test 1 partner
-        model.marginal_reg_coef    = 0
+        model.marginal_reg_coef         = 0
         model.n_epochs                  = hp['n_epochs_testing']
         model.n_steps                   = hp['n_steps_testing']
         model._init_rollout_buffer()
@@ -92,7 +106,16 @@ def load_model(model_path, policy_class, policy_kwargs, env, hp, partners, testi
     return model
 
 
-def adapt_task(load_model_fn, learn_model_fn, train_partners, test_partners, invert_train_partners, invert_test_partners, timesteps1, timesteps2, period):
+def adapt_task( load_model_fn, 
+                learn_model_fn, 
+                train_partners, 
+                test_partners, 
+                invert_train_partners, 
+                invert_test_partners, 
+                timesteps1, 
+                timesteps2, 
+                period
+            ):
     if len(test_partners) > len(train_partners):    test_partners = test_partners[:len(train_partners)]
 
     # ADAPT TASK
@@ -135,6 +158,8 @@ def adapt_partner_baseline(load_model_fn, learn_model_fn, partners, timesteps, p
         learn_model_fn(model, timesteps, save=False, period=period)
 
 def adapt_partner_modular(load_model_fn, learn_model_fn, partners, timesteps, period, do_optimal=False):
+    
+    # NOTE Load the partners and 
     model = load_model_fn(partners, testing=True)
     print("#section AdaptPartner")
     model.policy.do_init_weights(init_main=False, init_partner=True)

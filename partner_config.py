@@ -351,6 +351,8 @@ def get_blocks_partners(setting, partner_type):
     return train_partners, test_partners, inverttrain_partners, inverttest_partners
 
 
+
+# TODO Extend to include rulebased agents
 def get_hanabi_partners(setting, partner_type):
     partners_dict = {
         "": {

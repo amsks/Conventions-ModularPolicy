@@ -41,7 +41,7 @@ class BaseModel(ABC, nn.Module):
     :param features_extractor: (nn.Module) Network to extract features
         (a CNN when using images, a nn.Flatten() layer otherwise)
     :param normalize_images: (bool) Whether to normalize images or not,
-         dividing by 255.0 (True by default)
+        dividing by 255.0 (True by default)
     :param optimizer_class: (Type[th.optim.Optimizer]) The optimizer to use,
         ``th.optim.Adam`` by default
     :param optimizer_kwargs: (Optional[Dict[str, Any]]) Additional keyword arguments,
@@ -231,17 +231,17 @@ class BasePolicy(BaseModel):
 
         # Handle the different cases for images
         # as PyTorch use channel first format
-        if is_image_space(self.observation_space):
-            if not (
-                observation.shape == self.observation_space.shape or observation.shape[1:] == self.observation_space.shape
+        if is_image_space(self.observation_space) and not (
+            observation.shape == self.observation_space.shape
+            or observation.shape[1:] == self.observation_space.shape
+        ):
+            # Try to re-order the channels
+            transpose_obs = VecTransposeImage.transpose_image(observation)
+            if (
+                transpose_obs.shape == self.observation_space.shape
+                or transpose_obs.shape[1:] == self.observation_space.shape
             ):
-                # Try to re-order the channels
-                transpose_obs = VecTransposeImage.transpose_image(observation)
-                if (
-                    transpose_obs.shape == self.observation_space.shape
-                    or transpose_obs.shape[1:] == self.observation_space.shape
-                ):
-                    observation = transpose_obs
+                observation = transpose_obs
 
         vectorized_env = is_vectorized_observation(observation, self.observation_space)
 
@@ -293,38 +293,39 @@ class BasePolicy(BaseModel):
 
 class ActorCriticPolicy(BasePolicy):
     """
-    Policy class for actor-critic algorithms (has both policy and value prediction).
-    Used by A2C, PPO and the likes.
+        Policy class for actor-critic algorithms (has both policy and value prediction).
+        Used by A2C, PPO and the likes.
 
-    :param observation_space: (gym.spaces.Space) Observation space
-    :param action_space: (gym.spaces.Space) Action space
-    :param lr_schedule: (Callable) Learning rate schedule (could be constant)
-    :param net_arch: ([int or dict]) The specification of the policy and value networks.
-    :param device: (str or th.device) Device on which the code should run.
-    :param activation_fn: (Type[nn.Module]) Activation function
-    :param ortho_init: (bool) Whether to use or not orthogonal initialization
-    :param use_sde: (bool) Whether to use State Dependent Exploration or not
-    :param log_std_init: (float) Initial value for the log standard deviation
-    :param full_std: (bool) Whether to use (n_features x n_actions) parameters
-        for the std instead of only (n_features,) when using gSDE
-    :param sde_net_arch: ([int]) Network architecture for extracting features
-        when using gSDE. If None, the latent features from the policy will be used.
-        Pass an empty list to use the states as features.
-    :param use_expln: (bool) Use ``expln()`` function instead of ``exp()`` to ensure
-        a positive standard deviation (cf paper). It allows to keep variance
-        above zero and prevent it from growing too fast. In practice, ``exp()`` is usually enough.
-    :param squash_output: (bool) Whether to squash the output using a tanh function,
-        this allows to ensure boundaries when using gSDE.
-    :param features_extractor_class: (Type[BaseFeaturesExtractor]) Features extractor to use.
-    :param features_extractor_kwargs: (Optional[Dict[str, Any]]) Keyword arguments
-        to pass to the feature extractor.
-    :param normalize_images: (bool) Whether to normalize images or not,
-         dividing by 255.0 (True by default)
-    :param optimizer_class: (Type[th.optim.Optimizer]) The optimizer to use,
-        ``th.optim.Adam`` by default
-    :param optimizer_kwargs: (Optional[Dict[str, Any]]) Additional keyword arguments,
-        excluding the learning rate, to pass to the optimizer
+        :param observation_space: (gym.spaces.Space) Observation space
+        :param action_space: (gym.spaces.Space) Action space
+        :param lr_schedule: (Callable) Learning rate schedule (could be constant)
+        :param net_arch: ([int or dict]) The specification of the policy and value networks.
+        :param device: (str or th.device) Device on which the code should run.
+        :param activation_fn: (Type[nn.Module]) Activation function
+        :param ortho_init: (bool) Whether to use or not orthogonal initialization
+        :param use_sde: (bool) Whether to use State Dependent Exploration or not
+        :param log_std_init: (float) Initial value for the log standard deviation
+        :param full_std: (bool) Whether to use (n_features x n_actions) parameters
+            for the std instead of only (n_features,) when using gSDE
+        :param sde_net_arch: ([int]) Network architecture for extracting features
+            when using gSDE. If None, the latent features from the policy will be used.
+            Pass an empty list to use the states as features.
+        :param use_expln: (bool) Use ``expln()`` function instead of ``exp()`` to ensure
+            a positive standard deviation (cf paper). It allows to keep variance
+            above zero and prevent it from growing too fast. In practice, ``exp()`` is usually enough.
+        :param squash_output: (bool) Whether to squash the output using a tanh function,
+            this allows to ensure boundaries when using gSDE.
+        :param features_extractor_class: (Type[BaseFeaturesExtractor]) Features extractor to use.
+        :param features_extractor_kwargs: (Optional[Dict[str, Any]]) Keyword arguments
+            to pass to the feature extractor.
+        :param normalize_images: (bool) Whether to normalize images or not,
+            dividing by 255.0 (True by default)
+        :param optimizer_class: (Type[th.optim.Optimizer]) The optimizer to use,
+            ``th.optim.Adam`` by default
+        :param optimizer_kwargs: (Optional[Dict[str, Any]]) Additional keyword arguments,
+            excluding the learning rate, to pass to the optimizer
     """
+    
 
     def __init__(
         self,
@@ -402,6 +403,11 @@ class ActorCriticPolicy(BasePolicy):
         self._build(lr_schedule)
 
     def _get_data(self) -> Dict[str, Any]:
+        """[summary]
+
+        Returns:
+            Dict[str, Any]: [description]
+        """
         data = super()._get_data()
 
         default_none_kwargs = self.dist_kwargs or collections.defaultdict(lambda: None)
@@ -437,10 +443,10 @@ class ActorCriticPolicy(BasePolicy):
 
     def _build(self, lr_schedule: Callable[[float], float]) -> None:
         """
-        Create the networks and the optimizer.
+            Create the networks and the optimizer.
 
-        :param lr_schedule: (Callable) Learning rate schedule
-            lr_schedule(1) is the initial learning rate
+            :param lr_schedule: (Callable) Learning rate schedule
+                lr_schedule(1) is the initial learning rate
         """
         # Note: If net_arch is None and some features extractor is used,
         #       net_arch here is an empty list and mlp_extractor does not
@@ -758,6 +764,7 @@ def create_sde_features_extractor(
     return sde_features_extractor, latent_sde_dim
 
 
+# sourcery skip: dict-literal
 _policy_registry = dict()  # type: Dict[Type[BasePolicy], Dict[str, Type[BasePolicy]]]
 
 

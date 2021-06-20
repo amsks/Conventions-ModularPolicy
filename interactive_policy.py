@@ -9,6 +9,8 @@ import numpy as np
 from partner import Partner, PartnerPolicy, PPOPartnerPolicy
 from modular_policy import ModularPolicy
 
+# This is the policy class used in the algorithms. It stores the interactie policy 
+# and the partner objects. Thus, for Rulebased agents, we store them here 
 class InteractivePolicy(ModularPolicy):
     def __init__(self, *args, **kwargs):
         super(InteractivePolicy, self).__init__(*args, **kwargs)
@@ -35,8 +37,8 @@ class OptimalPolicy(ModularPolicy, ABC):
         pass
 
     def evaluate_actions(self, obs: th.Tensor,
-                         actions: th.Tensor,
-                         partner_idx: int) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
+                        actions: th.Tensor,
+                        partner_idx: int) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         optimal_mask = self.get_mask(obs) if self.use_optimal_mask else None
         return super(OptimalPolicy, self).evaluate_actions(obs=obs, actions=actions, partner_idx=partner_idx, action_mask=optimal_mask)
 
