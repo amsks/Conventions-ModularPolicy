@@ -137,7 +137,11 @@ class OnPolicyAlgorithm(BaseAlgorithm):
             for _ in range(self.policy.num_partners)]
 
     def collect_rollouts(
-        self, env: VecEnv, callback: BaseCallback, rollout_buffer: RolloutBuffer, n_rollout_steps: int, partner_idx: int
+        self, env: VecEnv, 
+        callback: BaseCallback, 
+        rollout_buffer: RolloutBuffer, 
+        n_rollout_steps: int, 
+        partner_idx: int
     ) -> bool:
         """
         Collect rollouts using the current policy and fill a `RolloutBuffer`.

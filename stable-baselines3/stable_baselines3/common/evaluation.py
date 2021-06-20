@@ -38,12 +38,15 @@ def evaluate_policy(
         assert env.num_envs == 1, "You must pass only one environment when using this function"
 
     episode_rewards, episode_lengths = [], []
+    
     for _ in range(n_eval_episodes):
         obs = env.reset()
         done, state = False, None
         episode_reward = 0.0
         episode_length = 0
         while not done:
+            # get action using the predict functin
+            # NOTE What is the role of partner ID ? 
             action, _ = model.predict(  observation=obs, 
                                         partner_idx=partner_idx, 
                                         deterministic=deterministic

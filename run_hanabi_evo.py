@@ -67,6 +67,9 @@ def main(args):
         "observation_type": pyhanabi.AgentObservationType.CARD_KNOWLEDGE.value
     }
 
+    # TODO Need to integrate this with Anton's hmf
+    # NOTE He is using gymt to make the env, which menas it is written 
+    # in a gym style ?
     env = gym.make('hanabi-v0', config=config)
 
     # This is the list of partners. It will be None for Selfplay, adn set to 
@@ -138,6 +141,8 @@ def main(args):
     if not args.testing:
         print("#Section Training")
         
+        
+        # PARTNERS is passed to load the model. Question is what role does it play ?
         model = load_model_fn(  partners=PARTNERS, 
                                 testing=False
                             )
